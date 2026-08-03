@@ -1,0 +1,105 @@
+name: Build and Verify
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'codex/**'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify Repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify required project files
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -f LICENSE
+
+      - name: Verify README heading
+        run: |
+          set -euo pipefail
+          grep -Eq '^# ' README.md
+
+  build:
+    name: Build Everything Present
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and test detected ecosystems
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -f Makefile ]]; then
+            echo "Makefile detected"
+            if grep -Eq '^[[:alnum:]_.-]+:.*' Makefile; then
+              for target in build all test check verify; do
+                if grep -Eq "^${target}:" Makefile; then
+                  echo "Running make ${target}"
+                  make "${target}"
+                fi
+              done
+            fi
+          fi
+
+          if [[ -f package.json ]]; then
+            echo "Node project detected"
+            npm ci
+            npm run build --if-present
+            npm test --if-present
+            npm run lint --if-present
+          fi
+
+          if [[ -f pyproject.toml ]] || [[ -f requirements.txt ]]; then
+            echo "Python project detected"
+            python -m pip install --upgrade pip
+            if [[ -f requirements.txt ]]; then
+              pip install -r requirements.txt
+            fi
+            if [[ -f pyproject.toml ]]; then
+              pip install .
+            fi
+            if [[ -f pytest.ini ]] || [[ -d tests ]]; then
+              pytest
+            fi
+          fi
+
+          if [[ -f Cargo.toml ]]; then
+            echo "Rust project detected"
+            cargo build --locked || cargo build
+            cargo test --locked || cargo test
+          fi
+
+          if [[ -f go.mod ]]; then
+            echo "Go project detected"
+            go build ./...
+            go test ./...
+          fi
+
+          if [[ -f pom.xml ]]; then
+            echo "Maven project detected"
+            mvn --batch-mode --no-transfer-progress verify
+          fi
+
+          if [[ -f build.gradle ]] || [[ -f build.gradle.kts ]]; then
+            echo "Gradle project detected"
+            if [[ -x ./gradlew ]]; then
+              ./gradlew build
+            else
+              gradle build
+            fi
+          fi
+
+          echo "Build/verify workflow completed"
