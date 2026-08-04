@@ -1,0 +1,9 @@
+{
+  "name": "bootstraps-build",
+  "version": "1.0.0",
+  "description": "Bootstrap build project",
+  "scripts": {
+    "build": "echo \"Build complete\""
+  },
+  "license": "MIT"
+}
