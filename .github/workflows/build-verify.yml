@@ -5,8 +5,8 @@ on:
     branches:
       - main
       - master
-      - 'codex/**'
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,6 +15,7 @@ jobs:
   verify:
     name: Verify Repository
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,6 +34,7 @@ jobs:
   build:
     name: Build Everything Present
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,19 +46,28 @@ jobs:
 
           if [[ -f Makefile ]]; then
             echo "Makefile detected"
-            if grep -Eq '^[[:alnum:]_.-]+:.*' Makefile; then
-              for target in build all test check verify; do
-                if grep -Eq "^${target}:" Makefile; then
-                  echo "Running make ${target}"
-                  make "${target}"
-                fi
-              done
+            target=""
+            for candidate in verify check test build all; do
+              if grep -Eq "^${candidate}:" Makefile; then
+                target="${candidate}"
+                break
+              fi
+            done
+            if [[ -n "${target}" ]]; then
+              echo "Running make ${target}"
+              make "${target}"
+            else
+              echo "No standard make target found (verify/check/test/build/all)"
             fi
           fi
 
           if [[ -f package.json ]]; then
             echo "Node project detected"
-            npm ci
+            if [[ -f package-lock.json ]]; then
+              npm ci
+            else
+              npm install
+            fi
             npm run build --if-present
             npm test --if-present
             npm run lint --if-present
